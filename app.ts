@@ -1,15 +1,15 @@
-import { Server } from 'https://deno.land/std@0.157.0/http/server.ts';
+import { Application } from 'https://deno.land/x/oak/mod.ts';
 
-const handler = () => {
-  const body = 'Hello Deno World!\n';
+import todosRoutes from './routes/todos.ts';
 
-  return new Response(body, { status: 200 });
-};
+const app = new Application();
 
-const port = 3000;
-const server = new Server({ handler });
-const listener = Deno.listen({ port: port });
+// app.use(async (ctx, next) => {
+//   console.log('Middleware!');
+//   await next();
+// });
 
-console.log("Server listening on http://localhost:3000!");
+app.use(todosRoutes.routes());
+app.use(todosRoutes.allowedMethods());
 
-await server.serve(listener);
+await app.listen({ port: 3000 });
