@@ -1,28 +1,38 @@
 import { Router } from 'https://deno.land/x/oak@v11.1.0/mod.ts';
+import { Bson } from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
+
+import { getDb } from '../helpers/db_client.ts';
 
 interface Todo {
-  id: string,
+  id?: string,
   text: string
 }
 
-let todos: Todo[] = [];
-
 const router = new Router();
 
-router.get('/todos', (ctx) => {
-  ctx.response.body = { todos: todos };
+router.get('/todos', async (ctx) => {
+  const todos = await getDb().collection('todos').find().toArray();
+
+  const transformedTodos = todos.map(todo => {
+    return {
+      id: todo._id.toString(),
+      text: todo.text
+    };
+  });
+
+  ctx.response.body = { todos: transformedTodos };
 });
 
 router.post('/todos', async (ctx) => {
-  const result = ctx.request.body();
-  const data = await result.value;
+  const data = await ctx.request.body().value;
 
   const newTodo: Todo = {
-    id: new Date().toISOString(),
     text: data.text
   };
+  
+  const todoId = await getDb().collection('todos').insertOne(newTodo);
+  newTodo.id = todoId.$oid;
 
-  todos.push(newTodo);
   ctx.response.body = {
     message: 'Created todo!',
     todo: newTodo
@@ -30,26 +40,23 @@ router.post('/todos', async (ctx) => {
 });
 
 router.put('/todos/:todoId', async (ctx) => {
-  const result = ctx.request.body();
-  const data = await result.value;
+  const data = await ctx.request.body().value;
+  const todoId = ctx.params.todoId!;
 
-  const todoId = ctx.params.todoId;
-  const todoIndex = todos.findIndex(todoItem => todoItem.id === todoId);
-
-  todos[todoIndex] = {
-    id: todos[todoIndex].id,
-    text: data.text
-  };
+  await getDb().collection('todos').updateOne(
+    { _id: new Bson.ObjectId(todoId) },
+    { $set: { text: data.text } }
+  );
 
   ctx.response.body = {
     message: 'Updated todo!'
   };
 });
 
-router.delete('/todos/:todoId', (ctx) => {
-  const todoId = ctx.params.todoId;
+router.delete('/todos/:todoId', async (ctx) => {
+  const todoId = ctx.params.todoId!;
 
-  todos = todos.filter(todoItem => todoItem.id !== todoId);
+  await getDb().collection('todos').deleteOne({ _id: new Bson.ObjectId(todoId)});
 
   ctx.response.body = {
     message: 'Deleted todo!'
